@@ -49,7 +49,7 @@ public class SwissTopoProxy {
             if (!loadedImages.containsKey(point)) {
                 loadedImages.put(point, ImageIO.read(new File("R:\\tiles\\22\\" + point.y + "_" + point.x + ".jpg")));
                 System.out.println("Loaded " + "R:\\tiles\\22\\" + point.y + "_" + point.x + ".jpg");
-                System.out.println(loadedImages.size() +  "/" + MAX_BUF_SIZE);
+                System.out.println(loadedImages.size() + "/" + MAX_BUF_SIZE);
             }
 
             BufferedImage img = loadedImages.get(point);
@@ -64,6 +64,11 @@ public class SwissTopoProxy {
     }
 
     static BufferedImage resampleImage(double x1, double y1, double x2, double y2, int w, int h) {
+
+        y1 = ((3600 * y1 - 169028.66) / 10000);
+        x1 = ((3600 * x1 - 26782.5) / 10000);
+        y2 = ((3600 * y2 - 169028.66) / 10000);
+        x2 = ((3600 * x2 - 26782.5) / 10000);
         BufferedImage res = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         for (int x = 0; x < w; x++) {
             for (int y = 0; y < h; y++) {
@@ -75,8 +80,12 @@ public class SwissTopoProxy {
                     for (double subY = 0; subY < 0.999; subY += 0.26) {
                         double tileX = (double) (x + subX) / w * x2 + ((double) w - x - subX) / w * x1;
                         double tileY = (double) (y + subY) / h * y2 + ((double) h - y - subY) / h * y1;
+
+                        double rtileY = (350000 - ((200147.07 + (308807.95 * tileY) + (3745.25 * tileX * tileX) + (76.63 * tileY * tileY)) - (194.56 * tileX * tileX * tileY)) + (119.79 * tileY * tileY * tileY)) / 640d;
+                        double rtileX = ((600072.37 + (211455.93 * tileX)) - (10938.51 * tileX * tileY)- (0.36 * tileX * tileY * tileY)- (44.54 * tileX * tileX * tileX) - 420000) / 640d;
+                        
                         //System.out.println(tileX + "|" + tileY);
-                        Color col = new Color(getRGB(tileX, tileY));
+                        Color col = new Color(getRGB(rtileX, rtileY));
                         r += col.getRed();
                         g += col.getGreen();
                         b += col.getBlue();
@@ -205,15 +214,11 @@ public class SwissTopoProxy {
                             //*/
                             System.out.println("Requested " + rqLat1 + ", " + rqLon1);
                             System.out.println("Requested " + rqLvX1 + ", " + rqLvY1);
-                            double tileY1 = (1350000 - rqLvY1) / 640d;
-                            double tileX1 = (rqLvX1 - 2420000) / 640d;
-                            double tileY2 = (1350000 - rqLvY2) / 640d;
-                            double tileX2 = (rqLvX2 - 2420000) / 640d;
 
                             File file = new File("R:\\tiles\\served\\" + rqZ + "_" + rqY + "_" + rqX + ".jpeg");
                             BufferedImage finalImg;
-                            if ( !file.exists()) {
-                                finalImg = resampleImage(tileX1, tileY1, tileX2, tileY2, 256, 256);
+                            if (true || !file.exists()) {
+                                finalImg = resampleImage(rqLon1, rqLat1, rqLon2, rqLat2, 256, 256);
                                 ImageIO.write(finalImg, "jpg", file);
                             } else {
                                 finalImg = ImageIO.read(file);
