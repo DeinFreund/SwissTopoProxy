@@ -5,7 +5,6 @@
  */
 package swisstopoproxy;
 
-import java.awt.Color;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
@@ -15,10 +14,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -102,14 +99,9 @@ public class SwissTopoProxy {
 
     public static void main(String[] args) throws Exception {
         loadedImages = Collections.synchronizedMap(loadedImages);
-        int port = 80;
-        ServerSocket serverSocket = new ServerSocket(port);
-        //System.out.println("Server listening on port: " + port);
+        ServerSocket serverSocket = new ServerSocket(80);
 
         // repeatedly wait for connections, and process
-        double __lat = 46.500;
-        double __lon = 7.43831;
-        System.out.println(LV95.wgs2chHP(__lat, __lon).x + " " + LV95.wgs2chHP(__lat, __lon).y);
         for (int i = 0; i < 8; i++) {
             new Thread() {
                 public void run() {
@@ -133,45 +125,27 @@ public class SwissTopoProxy {
                             double rqLat1 = 0, rqLat2 = 0;
                             double rqLon1 = 0, rqLon2 = 0;
                             for (String line : lines) {
-                                if (line.contains("Host: ")) {
-                                    line = "Host: wmts8.geo.admin.ch";
-                                }
                                 if (line.contains("GET /")) {
                                     int start = line.indexOf("21781/") + ("21781/").length();
                                     int end = line.indexOf(".jpeg");
-                                    //System.out.println(start + ":" + end + ":" + line);
                                     String nums[] = line.substring(start, end).split("/");
-                                    int z = Integer.valueOf(nums[0]);
-                                    int y = Integer.valueOf(nums[1]);
-                                    int x = Integer.valueOf(nums[2]);
-                                    int ox = x;
-                                    int oy = y;
-                                    int fac = 1 << (z - 15);
-                                    int mask = 0x0FFFFFFF - 2047;
-                                    rqLat1 = tile2lat(y, z);
-                                    rqLat2 = tile2lat(y + 1, z);
-                                    rqLon1 = tile2lon(x, z);
-                                    rqLon2 = tile2lon(x + 1, z);
-
-                                    rqX = x;
-                                    rqY = y;
-                                    rqZ = z;
-                                    System.out.println("fac: " + fac);
-                                    line = "GET /1.0.0/ch.swisstopo.pixelkarte-farbe/default/20151231/21781/" + z + "/" + y + "/" + x + ".jpeg HTTP/1.1";
-                                    System.out.println(ox + "|" + oy + " @" + z + " -> " + x + "|" + y);
+                                    rqZ = Integer.valueOf(nums[0]);
+                                    rqY = Integer.valueOf(nums[1]);
+                                    rqX = Integer.valueOf(nums[2]);
+                                    rqLat1 = tile2lat(rqY, rqZ);
+                                    rqLat2 = tile2lat(rqY + 1, rqZ);
+                                    rqLon1 = tile2lon(rqX, rqZ);
+                                    rqLon2 = tile2lon(rqX + 1, rqZ);
+                                    
+                                    System.out.println("Serving tile " + rqX + "|" + rqY + ", Zoom: " + rqZ );
                                 }
                             }
                             
-                            double rqLvX1 = ApproxSwissProj.WGS84toLV03(rqLat1, rqLon1, 0)[0] + 2e6;
-                            double rqLvY1 = ApproxSwissProj.WGS84toLV03(rqLat1, rqLon1, 0)[1] + 1e6;
-                            double rqLvX2 = ApproxSwissProj.WGS84toLV03(rqLat2, rqLon2, 0)[0] + 2e6;
-                            double rqLvY2 = ApproxSwissProj.WGS84toLV03(rqLat2, rqLon2, 0)[1] + 1e6;
-                            System.out.println("Requested " + rqLat1 + ", " + rqLon1);
-                            System.out.println("Requested " + rqLvX1 + ", " + rqLvY1);
+                            System.out.println("WGS84: " + rqLon1 + "° E " + rqLat1 + "° N\n");
 
                             File file = new File("R:\\tiles\\served\\" + rqZ + "_" + rqY + "_" + rqX + ".jpeg");
                             BufferedImage finalImg;
-                            if (true || !file.exists()) {
+                            if (!file.exists()) {
                                 finalImg = resampleImage(rqLon1, rqLat1, rqLon2, rqLat2, 256, 256);
                                 ImageIO.write(finalImg, "jpg", file);
                             } else {
@@ -184,21 +158,8 @@ public class SwissTopoProxy {
                             baos.close();
 
                             out.write("HTTP/1.1 200 OK" + "\r\n");
-                            out.write("Accept-Ranges: bytes" + "\r\n");
-                            out.write("Accept-Ranges: bytes" + "\r\n");
-                            out.write("Access-Control-Allow-Origin: *" + "\r\n");
-                            out.write("Age: 0" + "\r\n");
-                            out.write("Cache-Control: public, max-age=1800" + "\r\n");
                             out.write("Content-Type: image/jpeg" + "\r\n");
-                            out.write("Date: Sun, 27 Mar 2016 21:54:02 GMT" + "\r\n");
-                            out.write("ETag: \"fd6cb926e6ecfdaebf1e8f5e2b5892d7\"" + "\r\n");
-                            out.write("Last-Modified: Wed, 12 Aug 2015 13:40:36 GMT" + "\r\n");
-                            out.write("Server: AmazonS3" + "\r\n");
-                            out.write("Via: 1.1 varnish-v4" + "\r\n");
-                            out.write("X-Cache: MISS" + "\r\n");
-                            out.write("X-Varnish: 115812449" + "\r\n");
                             out.write("Content-Length: " + byteArr.length + "\r\n");
-                            out.write("Connection: keep-alive" + "\r\n");
                             out.write("\r\n");
                             out.flush();
 
