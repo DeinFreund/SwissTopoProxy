@@ -30,6 +30,8 @@ import javax.imageio.ImageIO;
 public class SwissTopoProxy {
 
     final static int MAX_BUF_SIZE = 1000;
+    final static int TILE_WIDTH = 256;
+    final static int TILE_HEIGHT = 256;
 
     static Map<Point, BufferedImage> loadedImages = new LinkedHashMap(MAX_BUF_SIZE + 1, .75F, true) {
 
@@ -40,7 +42,7 @@ public class SwissTopoProxy {
     };
 
     static int getRGB(int tileX, int tileY) throws IOException {
-            Point point = new Point(tileX / 256, tileY / 256);
+            Point point = new Point(tileX / TILE_WIDTH, tileY / TILE_HEIGHT);
             if (!loadedImages.containsKey(point)) {
                 File file = new File("R:\\tiles\\22\\" + point.y + "_" + point.x + ".jpg");
                 if (!file.exists()) return 0;
@@ -48,29 +50,29 @@ public class SwissTopoProxy {
             }
 
             BufferedImage img = loadedImages.get(point);
-            return img.getRGB(tileX % 256, tileY % 256);
+            return img.getRGB(tileX % TILE_WIDTH, tileY % TILE_HEIGHT);
     }
 
-    static BufferedImage resampleImage(double x1, double y1, double x2, double y2, int w, int h) throws IOException{
+    static BufferedImage resampleImage(double x1, double y1, double x2, double y2) throws IOException{
 
         y1 = ((3600 * y1 - 169028.66) / 10000);
         x1 = ((3600 * x1 - 26782.5) / 10000);
         y2 = ((3600 * y2 - 169028.66) / 10000);
         x2 = ((3600 * x2 - 26782.5) / 10000);
-        BufferedImage res = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        for (int x = 0; x < w; x++) {
-            for (int y = 0; y < h; y++) {
+        BufferedImage res = new BufferedImage(TILE_WIDTH, TILE_HEIGHT, BufferedImage.TYPE_INT_RGB);
+        for (int x = 0; x < TILE_WIDTH; x++) {
+            for (int y = 0; y < TILE_HEIGHT; y++) {
                 int cnt = 0;
                 int r = 0;
                 int g = 0;
                 int b = 0;
                 for (double subX = 0; subX < 0.999; subX += 0.26) {
                     for (double subY = 0; subY < 0.999; subY += 0.26) {
-                        double tileX = (x + subX) / w * x2 + (w - x - subX) / w * x1;
-                        double tileY = (y + subY) / h * y2 + (h - y - subY) / h * y1;
+                        double tileX = (x + subX) / TILE_WIDTH * x2 + (TILE_WIDTH - x - subX) / TILE_WIDTH * x1;
+                        double tileY = (y + subY) / TILE_HEIGHT * y2 + (TILE_HEIGHT - y - subY) / TILE_HEIGHT * y1;
 
-                        double rtileY = 256 * (350000 - ((200147.07 + (308807.95 * tileY) + (3745.25 * tileX * tileX) + (76.63 * tileY * tileY)) - (194.56 * tileX * tileX * tileY)) + (119.79 * tileY * tileY * tileY)) / 640d;
-                        double rtileX = 256 *((600072.37 + (211455.93 * tileX)) - (10938.51 * tileX * tileY)- (0.36 * tileX * tileY * tileY)- (44.54 * tileX * tileX * tileX) - 420000) / 640d;
+                        double rtileY = TILE_HEIGHT * (350000 - ((200147.07 + (308807.95 * tileY) + (3745.25 * tileX * tileX) + (76.63 * tileY * tileY)) - (194.56 * tileX * tileX * tileY)) + (119.79 * tileY * tileY * tileY)) / 640d;
+                        double rtileX = TILE_WIDTH *((600072.37 + (211455.93 * tileX)) - (10938.51 * tileX * tileY)- (0.36 * tileX * tileY * tileY)- (44.54 * tileX * tileX * tileX) - 420000) / 640d;
                         
                         int col = getRGB((int)rtileX, (int)rtileY);
                         r += (col & 0xFF0000) >> 16;
@@ -146,7 +148,7 @@ public class SwissTopoProxy {
                             File file = new File("R:\\tiles\\served\\" + rqZ + "_" + rqY + "_" + rqX + ".jpeg");
                             BufferedImage finalImg;
                             if (!file.exists()) {
-                                finalImg = resampleImage(rqLon1, rqLat1, rqLon2, rqLat2, 256, 256);
+                                finalImg = resampleImage(rqLon1, rqLat1, rqLon2, rqLat2);
                                 ImageIO.write(finalImg, "jpg", file);
                             } else {
                                 finalImg = ImageIO.read(file);
