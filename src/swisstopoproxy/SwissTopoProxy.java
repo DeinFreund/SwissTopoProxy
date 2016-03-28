@@ -12,6 +12,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.InetSocketAddress;
@@ -20,11 +21,9 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import javax.imageio.ImageIO;
 
 /**
@@ -43,27 +42,19 @@ public class SwissTopoProxy {
         }
     };
 
-    static int getRGB(double tileX, double tileY) {
-        try {
-            Point point = new Point((int) tileX, (int) tileY);
+    static int getRGB(int tileX, int tileY) throws IOException {
+            Point point = new Point(tileX / 256, tileY / 256);
             if (!loadedImages.containsKey(point)) {
-                loadedImages.put(point, ImageIO.read(new File("R:\\tiles\\22\\" + point.y + "_" + point.x + ".jpg")));
-                System.out.println("Loaded " + "R:\\tiles\\22\\" + point.y + "_" + point.x + ".jpg");
-                System.out.println(loadedImages.size() + "/" + MAX_BUF_SIZE);
+                File file = new File("R:\\tiles\\22\\" + point.y + "_" + point.x + ".jpg");
+                if (!file.exists()) return 0;
+                loadedImages.put(point, ImageIO.read(file));
             }
 
             BufferedImage img = loadedImages.get(point);
-            int x = (int) Math.floor((tileX - (int) tileX) * img.getWidth());
-            //System.out.println((tileX - (int)tileX) + " * " + img.getWidth());
-            int y = (int) Math.floor((tileY - (int) tileY) * img.getHeight());
-            return img.getRGB(x, y);
-        } catch (Exception ex) {
-            //ex.printStackTrace();
-            return 0;
-        }
+            return img.getRGB(tileX % 256, tileY % 256);
     }
 
-    static BufferedImage resampleImage(double x1, double y1, double x2, double y2, int w, int h) {
+    static BufferedImage resampleImage(double x1, double y1, double x2, double y2, int w, int h) throws IOException{
 
         y1 = ((3600 * y1 - 169028.66) / 10000);
         x1 = ((3600 * x1 - 26782.5) / 10000);
@@ -72,42 +63,31 @@ public class SwissTopoProxy {
         BufferedImage res = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         for (int x = 0; x < w; x++) {
             for (int y = 0; y < h; y++) {
-                float cnt = 0;
+                int cnt = 0;
                 int r = 0;
                 int g = 0;
                 int b = 0;
                 for (double subX = 0; subX < 0.999; subX += 0.26) {
                     for (double subY = 0; subY < 0.999; subY += 0.26) {
-                        double tileX = (double) (x + subX) / w * x2 + ((double) w - x - subX) / w * x1;
-                        double tileY = (double) (y + subY) / h * y2 + ((double) h - y - subY) / h * y1;
+                        double tileX = (x + subX) / w * x2 + (w - x - subX) / w * x1;
+                        double tileY = (y + subY) / h * y2 + (h - y - subY) / h * y1;
 
-                        double rtileY = (350000 - ((200147.07 + (308807.95 * tileY) + (3745.25 * tileX * tileX) + (76.63 * tileY * tileY)) - (194.56 * tileX * tileX * tileY)) + (119.79 * tileY * tileY * tileY)) / 640d;
-                        double rtileX = ((600072.37 + (211455.93 * tileX)) - (10938.51 * tileX * tileY)- (0.36 * tileX * tileY * tileY)- (44.54 * tileX * tileX * tileX) - 420000) / 640d;
+                        double rtileY = 256 * (350000 - ((200147.07 + (308807.95 * tileY) + (3745.25 * tileX * tileX) + (76.63 * tileY * tileY)) - (194.56 * tileX * tileX * tileY)) + (119.79 * tileY * tileY * tileY)) / 640d;
+                        double rtileX = 256 *((600072.37 + (211455.93 * tileX)) - (10938.51 * tileX * tileY)- (0.36 * tileX * tileY * tileY)- (44.54 * tileX * tileX * tileX) - 420000) / 640d;
                         
-                        //System.out.println(tileX + "|" + tileY);
-                        Color col = new Color(getRGB(rtileX, rtileY));
-                        r += col.getRed();
-                        g += col.getGreen();
-                        b += col.getBlue();
-                        cnt += 256;
+                        int col = getRGB((int)rtileX, (int)rtileY);
+                        r += (col & 0xFF0000) >> 16;
+                        g += (col & 0x00FF00) >> 8;
+                        b += (col & 0x0000FF);
+                        cnt ++;
                     }
                 }
-                res.setRGB(x, y, new Color(r / cnt, g / cnt, b / cnt).getRGB());
+                res.setRGB(x, y, ((r / cnt) << 16) | ((g / cnt) << 8) | (b / cnt));
             }
         }
-        //System.exit(0);
         return res;
     }
-
-    /*
-    static double tile2lon(int x, int z) {
-        return (x / Math.pow(2, z) * 360 - 180);
-    }
-
-    static double tile2lat(int y, int z) {
-        double n = Math.PI - 2 * Math.PI * y / Math.pow(2, z);
-        return (180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))));
-    }*/
+    
     static double tile2lon(int x, int z) {
         double n = Math.pow(2, z);
         return x / n * 360 - 180;
@@ -120,14 +100,6 @@ public class SwissTopoProxy {
         return lat_rad * 180 / Math.PI;
     }
 
-    /*
-    static double lon2lv95(double lon) {
-        return (lon - 5.9700) / (10.4900 - 5.97) * (2837076.5648 - 2485869.5728) + 2485869.5728;
-    }
-
-    static double lat2lv95(double lat) {
-        return (lat - 45.8300) / (47.8100 - 45.8300) * (1299941.7864 - 1076443.1884) + 1076443.1884;
-    }*/
     public static void main(String[] args) throws Exception {
         loadedImages = Collections.synchronizedMap(loadedImages);
         int port = 80;
@@ -144,7 +116,6 @@ public class SwissTopoProxy {
                     while (true) {
                         try {
                             Socket clientSocket = serverSocket.accept();
-                            //System.out.println("Client connected");
 
                             BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                             BufferedWriter out = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
@@ -152,21 +123,12 @@ public class SwissTopoProxy {
                             String s;
                             List<String> lines = new ArrayList();
                             while ((s = in.readLine()) != null) {
-                                //System.out.println(s);
                                 lines.add(s);
                                 if (s.isEmpty()) {
                                     break;
                                 }
                             }
-                            //wmts8.geo.admin.ch
-
-                            ////System.out.println("sending json.toString());
-                            SocketAddress address = new InetSocketAddress("wmts8.geo.admin.ch", 80);
-                            //Socket proxySocket = new Socket();
-                            //proxySocket.connect(address, 20000);
-                            //BufferedWriter outToServer = new BufferedWriter(new OutputStreamWriter(proxySocket.getOutputStream()));
-                            //DataInputStream proxyIn = new DataInputStream(proxySocket.getInputStream());
-                            //System.out.println("Sending:");
+                            
                             int rqX = 0, rqY = 0, rqZ = 0;
                             double rqLat1 = 0, rqLat2 = 0;
                             double rqLon1 = 0, rqLon2 = 0;
@@ -199,19 +161,11 @@ public class SwissTopoProxy {
                                     System.out.println(ox + "|" + oy + " @" + z + " -> " + x + "|" + y);
                                 }
                             }
-                            //System.out.println("Binary follows");
-                            /*
-                double rqLvX1 = LV95.wgs2chHP(rqLat1, rqLon1).x;
-                double rqLvY1 = LV95.wgs2chHP(rqLat1, rqLon1).y;
-                double rqLvX2 = LV95.wgs2chHP(rqLat2, rqLon2).x;
-                double rqLvY2 = LV95.wgs2chHP(rqLat2, rqLon2).y;
-                //*/
-                            ///*
+                            
                             double rqLvX1 = ApproxSwissProj.WGS84toLV03(rqLat1, rqLon1, 0)[0] + 2e6;
                             double rqLvY1 = ApproxSwissProj.WGS84toLV03(rqLat1, rqLon1, 0)[1] + 1e6;
                             double rqLvX2 = ApproxSwissProj.WGS84toLV03(rqLat2, rqLon2, 0)[0] + 2e6;
                             double rqLvY2 = ApproxSwissProj.WGS84toLV03(rqLat2, rqLon2, 0)[1] + 1e6;
-                            //*/
                             System.out.println("Requested " + rqLat1 + ", " + rqLon1);
                             System.out.println("Requested " + rqLvX1 + ", " + rqLvY1);
 
@@ -227,7 +181,6 @@ public class SwissTopoProxy {
                             ImageIO.write(finalImg, "jpg", baos);
                             baos.flush();
                             byte[] byteArr = baos.toByteArray();
-                            //System.out.println("Binary is " + byteArr.length + " bytes");
                             baos.close();
 
                             out.write("HTTP/1.1 200 OK" + "\r\n");
@@ -252,11 +205,9 @@ public class SwissTopoProxy {
                             clientSocket.getOutputStream().write(byteArr);
                             clientSocket.getOutputStream().flush();
 
-                            //System.out.println("Connection terminated");
                             out.close();
                             in.close();
                             clientSocket.close();
-                            //break;
                         } catch (Exception ex) {
                             ex.printStackTrace();
                         }
